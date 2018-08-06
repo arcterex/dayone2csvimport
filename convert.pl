@@ -3,6 +3,9 @@ use strict;
 use HTML::WikiConverter;
 use Text::CSV;
 use Data::Dumper;
+#use Date::Format;
+#use Date::Parse;
+use DateTime::Format::Strptime;
 
 =pod
 Structure of each entry:
@@ -18,8 +21,8 @@ $VAR1 = [
 7          'allow_pings',
 8          'atom_id',
 9          'author_id',
-10          'authored_on',
-11          'blog_id',
+10         'authored_on',
+11         'blog_id',
 12         'categories_secondary',
 13         'category_label',
 14         'class',
@@ -55,21 +58,79 @@ my $csv = Text::CSV->new ( { binary => 1 } )or die "Cannot use CSV: " . Text::CS
 my $wc = new HTML::WikiConverter( dialect => 'Markdown', link_style => 'inline' );
 open my $fh, "<:encoding(utf8)", "entries.csv" or die "entries.csv: $!";
 
+# let's make some aliases so addressing fields in the array is easier
+my $text = 30;
+my $text_more = 31;
+my $title = 5;
+my $authored_on = 10;
+my $keywords = 22;
+my $tags_list = 29;
+
 my $line = 0;
 my $more_count = 0;
+
+my $debug = 0;
+
+=pod 
+Output Format:
+
+<tab>Date:	June 24, 2016 at 10:59:06 AM MDT
+
+Title
+Text
+
+#tags
+
+<tab>Date:....
+
+=cut
+# date time parser
+my $parser = DateTime::Format::Strptime->new(
+	pattern => '%F %T',
+	on_error => 'croak',
+	time_zone => 'Canada/Pacific',
+);
 while ( my $row = $csv->getline( $fh ) ) {
 	$line++;
-	print "Line = $line\n";
+	next if( $line == 1);
+	print "Line = $line\n" if $debug;
+	print Dumper $row if $debug;
+
+	# Get the date
+	# Incoming date time string is:
+	# 1996-11-03 12:24:44
+
+	my $entry_date_time = $row->[$authored_on];
+#	print "Datetime: $entry_date_time\n";
+	my $dt = $parser->parse_datetime($entry_date_time);
+
+	# Turn it into :
+	# Date:  June 24, 2016 at 10:59:06 AM MDT
+	my $output_date_time = $dt->strftime("%b %d, %Y at %l:%M:S %p %Z");
+
+#	print "Date:  $entry_date_time | ";
+#	print "$output_date_time\n";
+
+	# Get the title
+	my $output_title = $row->[$title];
+
 	print Dumper $row;
-	print $wc->html2wiki( $row->[30] );
+	print "Title: $output_title\n";
+
+	# Get the text
+	my $text;
+	$text = $wc->html2wiki( $row->[$text] );
 	# if there's something in the 'text_more' colume add it after
-	if( $row->[31] ne "" ) {
-		print $wc->html2wiki( $row->[31] );
-		$more_count++;
+	if( $row->[$text_more] ne "" ) {
+		$text .= "\n\n" . $wc->html2wiki( $row->[$text_more] );
 	}
-	print "\n-----\n";
+
+	# Get the tags
+	print $row->[$tags_list] if $debug;
+	
+	print "\n-----\n" if $debug;
 	push @rows, $row;
-	last if $line > 2;
+	last if $line > 15;
 }
 
 print "Entries: $line\n";
