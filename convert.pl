@@ -54,7 +54,12 @@ my @rows;
 my $csv = Text::CSV->new ( { 
 		binary => 1,
 		quote_space => 0,
+		allow_loose_quotes => 1,
+		allow_loose_escapes => 1,
+		allow_unquoted_escape => 1,
+		always_quote => 1,
 	} ) or die "Cannot use CSV: " . Text::CSV->error_diag();
+
 
 # prep for HTML -> Markdown
 
@@ -69,9 +74,9 @@ my $authored_on = 10;
 my $keywords = 22;
 my $tags_list = 29;
 
-my $line = 0;
 my $more_count = 0;
 
+my $errors = 0;
 my $debug = 0;
 
 =pod 
@@ -93,10 +98,27 @@ my $parser = DateTime::Format::Strptime->new(
 	on_error => 'croak',
 	time_zone => 'Canada/Pacific',
 );
-while ( my $row = $csv->getline( $fh ) ) {
-	$line++;
-	next if( $line == 1);
-	print "Line = $line\n" if $debug;
+#while ( my $row = $csv->getline( $fh ) ) {
+while( my $line = <$fh>) {
+	next if( $. == 1); # skip the first line
+
+	if( my $parsed_line = $csv->parse($line)) {
+		my @fields = $csv->fields();
+	} else {
+		my $err = $csv->error_input;
+		print "Failed to parse line: $err\n\n-----\n";
+		$csv->error_diag ();
+		print "\n\n---\n" . Dumper $line . "\n--\n" . Dumper $parsed_line . "\n\n";
+		$errors++;
+	}
+=pod
+	my $row = $csv->parse();
+
+	# Error checking for bad line
+	unless( $row ) {
+		my @diag = $csv->error_diag;
+		print Dumper @diag;
+	}
 	print Dumper $row if $debug;
 
 	# Get the date
@@ -125,6 +147,9 @@ while ( my $row = $csv->getline( $fh ) ) {
 	# Title: ="08/09/2000"
 	# so I need to parse out what's in between ="xxx"
 	$output_title =~ s/^=\"(.*)\"$/$1/;
+#	print $output_title . "\n";
+
+	print $csv->status();
 
 	# Get the text
 	my $text;
@@ -139,9 +164,9 @@ while ( my $row = $csv->getline( $fh ) ) {
 	
 	print "\n-----\n" if $debug;
 	push @rows, $row;
-	last if $line > 905;
+	last if $. > 905;
+=cut
 }
 
-print "Entries: $line\n";
-print "More: $more_count\n";
+print "Errors $errors\n";
 print "Done\n";
