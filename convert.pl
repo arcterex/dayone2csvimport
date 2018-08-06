@@ -51,7 +51,10 @@ $VAR1 = [
 
 my @rows;
 # open up the CSV
-my $csv = Text::CSV->new ( { binary => 1 } )or die "Cannot use CSV: " . Text::CSV->error_diag();
+my $csv = Text::CSV->new ( { 
+		binary => 1,
+		quote_space => 0,
+	} ) or die "Cannot use CSV: " . Text::CSV->error_diag();
 
 # prep for HTML -> Markdown
 
@@ -114,8 +117,14 @@ while ( my $row = $csv->getline( $fh ) ) {
 	# Get the title
 	my $output_title = $row->[$title];
 
-	print Dumper $row;
-	print "Title: $output_title\n";
+	# for a bunch of titles the CSV they look like:
+	# Title: ="07/31/2000"
+	# Title: ="08/01/2000"
+	# Title: ="08/01/2000 2"
+	# Title: ="08/07/2000"
+	# Title: ="08/09/2000"
+	# so I need to parse out what's in between ="xxx"
+	$output_title =~ s/^=\"(.*)\"$/$1/;
 
 	# Get the text
 	my $text;
@@ -130,7 +139,7 @@ while ( my $row = $csv->getline( $fh ) ) {
 	
 	print "\n-----\n" if $debug;
 	push @rows, $row;
-	last if $line > 15;
+	last if $line > 905;
 }
 
 print "Entries: $line\n";
