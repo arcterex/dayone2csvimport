@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use HTML::WikiConverter;
-use Text::CSV;
+use Text::CSV::Simple;
 use Data::Dumper;
 #use Date::Format;
 #use Date::Parse;
@@ -51,9 +51,9 @@ $VAR1 = [
 
 my @rows;
 # open up the CSV
-my $csv = Text::CSV->new ( { 
+my $csv = Text::CSV::Simple->new ( { 
 		binary => 1,
-		quote_space => 0,
+		always_quote => 1,
 	} ) or die "Cannot use CSV: " . Text::CSV->error_diag();
 
 # prep for HTML -> Markdown
@@ -93,6 +93,18 @@ my $parser = DateTime::Format::Strptime->new(
 	on_error => 'croak',
 	time_zone => 'Canada/Pacific',
 );
+
+# Load up the file
+$csv->add_trigger(on_failure => sub { 
+        my ($self, $csv) = @_;
+        warn "Failed on " . $csv->error_input . "\n";
+});
+#$csv->want_fields(5,10,22,29,30,31);
+#$csv->field_map(qw/title authored_on keywords tags_list text text_more/);
+my @rows = $csv->read_file('entries.csv');
+
+exit;
+
 while ( my $row = $csv->getline( $fh ) ) {
 	$line++;
 	next if( $line == 1);
