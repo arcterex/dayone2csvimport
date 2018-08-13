@@ -249,8 +249,6 @@ while ( my $row = $csv->getline( $fh ) )
 	#### Final entry creating
 	# Now create the entry from the template that we got from Day One
 	my $entry = <<END;
-	Date:	$output_date_time
-
 $output_title
 $output_text
 
