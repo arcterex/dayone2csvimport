@@ -134,6 +134,10 @@ my $debug = 0;
 # imported entries somehow?
 my $default_tag = "OldBlogEntry";
 
+# Other system variables
+my $dayoneexecutable = "dayone2";
+my $journalname = "Old Blog";
+
 #### Create the parsing objects
 # Create the CSV parser that will be fed the input file filehandle 
 my $csv = Text::CSV->new ( { 
@@ -242,8 +246,10 @@ while ( my $row = $csv->getline( $fh ) )
 
 	# Now create the string from the array
 	my $output_tags = "";
+	my $cli_output_tags = "";
 	foreach( @outtags ) { 
 		$output_tags .= "#$_ ";
+		$cli_output_tags = $_
 	}
 
 	#### Final entry creating
@@ -251,16 +257,23 @@ while ( my $row = $csv->getline( $fh ) )
 	my $entry = <<END;
 $output_title
 $output_text
-
-$output_tags
-
 END
 
-	#### Output the entry to STDOUT (or somewhere else if you write it to a file)
-	print $entry;
+	# Create a file to write this to
+	my $filename = "entry-$line.txt";
+	open( my $fh, '>', $filename ) or die("Can't open file: $filename - $!");
+
+	#### Output the entry to a file (or somewhere else if you write it to a file)
+	print $fh $entry;
+
+	# Close the file
+	close $fh;
+
+	# finally call the dayone2 command on the command line with arguments for the date, tags, etc
+	my $command = "cat $filename | $dayoneexecutable --journal --date='$output_date_time' --tags $cli_output_tags new";
 
 	# For testing we can stop at a certain point to check the results or do a test import
-	#last if $line > 10;
+	last if $line > 10;
 
 	# and we're done, lets do the next one
 
