@@ -6,6 +6,10 @@ use Data::Dumper;
 use DateTime::Format::Strptime;
 
 =pod
+## TODO ##
+ - Convert comments in HTML to something inline before the html->markdown happens
+ - Does markdown do underlines?
+ - Some entries don't have <P> and it's fucking up *some* entries
 
 # About 
 This is a very custom perl script to do the singlular job of converting a CSV from 
@@ -29,21 +33,6 @@ This is from:
 This can be a template if you're a perl programmer from the early '00s to modify to use with 
 your own CSV data to import from CSV to Day One by doing some fiddling
 
-
-## NOTE ##
-## TODO ##
-I just found that Day One has a set of command line tools here 
-http://help.dayoneapp.com/tips-and-tutorials/command-line-interface-cli which look nice
-and it should be really easy to modify this script to use this, either by executing the 
-commands in the shell from here, or outputting to the STDOUT in a format that is usable,
-maybe with command line arguments by entry ID or something. Most likely the best thing to 
-do is simply run the command via the shell at the bottom of the main loop like:
-	`echo $output_text | dayone2 -d $output_date -j OldBlog --tags $output_tags 
-or something like that.
-
-Probably the biggest modification will be to the tags output
-
-Continuing on....
 
 ## Stuff you'll need to change if you're not me
 
@@ -136,7 +125,7 @@ my $default_tag = "OldBlogEntry";
 
 # Other system variables
 my $dayoneexecutable = "dayone2";
-my $journalname = "Old Blog";
+my $journalname = 'Old Blog';
 
 #### Create the parsing objects
 # Create the CSV parser that will be fed the input file filehandle 
@@ -246,11 +235,29 @@ while ( my $row = $csv->getline( $fh ) )
 
 	# Now create the string from the array
 	my $output_tags = "";
+
+	# For the CLI we need to replace any spaces in the tags with "\ " 
+	# so #foo #bar baz turns in "foo bar\ baz"
 	my $cli_output_tags = "";
+
+	my $foo = 0;
 	foreach( @outtags ) { 
 		$output_tags .= "#$_ ";
-		$cli_output_tags = $_
+		# now deal with tags for the command line
+		my $cli_tag = $_;
+
+		# do substitution only if the tag has a space in it
+		if( $_ =~ /\S\s\S/) { 
+			$cli_tag =~ s/\s/\\ /g;
+			$foo = 1;
+		}
+
+		$cli_output_tags .= $cli_tag . " ";
 	}
+
+	# trim whitespace from both sides
+	$cli_output_tags =~ s/^\s+|\s+$//g;
+	if( $foo == 1 ) { print "'$cli_output_tags'\n"; }
 
 	#### Final entry creating
 	# Now create the entry from the template that we got from Day One
@@ -270,7 +277,18 @@ END
 	close $fh;
 
 	# finally call the dayone2 command on the command line with arguments for the date, tags, etc
-	my $command = "cat $filename | $dayoneexecutable --journal --date='$output_date_time' --tags $cli_output_tags new";
+	my $command = "cat $filename | $dayoneexecutable --journal \"$journalname\" --date='$output_date_time' --tags $cli_output_tags -- new";
+
+	my $output = `$command`;
+	if( $output =~ /Created new entry with uuid/ ) {
+		print "Successfully created entry $line ($output_date_time)\n";
+	} else {
+		# ERROR!!
+		die "Error creating entry :( \n$output\n\n";
+	}
+
+	# finally remove the file
+	unlink $filename;
 
 	# For testing we can stop at a certain point to check the results or do a test import
 	last if $line > 10;
