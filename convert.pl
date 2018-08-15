@@ -7,9 +7,12 @@ use DateTime::Format::Strptime;
 
 =pod
 ## TODO ##
- - Convert comments in HTML to something inline before the html->markdown happens
- - Does markdown do underlines?
+ - Does markdown do underlines? - NO
  - Some entries don't have <P> and it's fucking up *some* entries
+ - Have to go in manually to fix the <tt><pre> code and convert it to code ```xxx``` in markdown after the fact
+ - Have to do a spot check and fix some <dl><dd> -> quote blocks, missing images, and some formatting issues
+ 	that have resulted from converting code to colorful code (but that is converted into markdown which doesn't 
+	work
 
 # About 
 This is a very custom perl script to do the singlular job of converting a CSV from 
@@ -109,15 +112,30 @@ my $filename = "entries.csv";
 my $base_url = "http://arcterex.net";
 
 # Give the CSV column numbers some names so addressing fields in the array is easier
-my $title 			= 5;
-my $authored_on 	= 10;
-my $keywords 		= 22;
-my $tags_list 		= 29;
-my $text 			= 30;
-my $text_more 		= 31;
+my $id 					= 0;
+my $title 				= 5;
+my $authored_on 		= 10;
+my $convert_breaks 	= 15;
+my $keywords 			= 22;
+my $tags_list 			= 29;
+my $text 				= 30;
+my $text_more 			= 31;
 
-# Debug 1 or 0 - currently does nothing, but handy to add in for testing
-my $debug = 0;
+# Debug 1 or 0 - currently doesn't do much
+my $debug = 1;
+
+# Are we doing this for real?  1 = no, 0 = yes
+my $dryrun = 1;
+
+# output the entry to the console?
+my $output_to_console = 1;
+
+# looking for a specific id for the entry?
+my $specific_entry = 4315;
+
+# debugging and only want to output X entries before stopping (empty = all, number = that number)
+my $short_run = "10";
+
 
 # Is there a default tag you want to add to each entry to identify the 
 # imported entries somehow?
@@ -165,6 +183,12 @@ while ( my $row = $csv->getline( $fh ) )
 {
 	$line++;
 
+	# are we debugging and only looking for a specific entry?
+	if( $specific_entry ) { 
+		next if( $row->[$id] ne $specific_entry );
+		print "DEBUG: Only printing entry ID #$specific_entry\n" if $debug;
+	}
+
 	# Error checking if something went wrong
 	if( $csv->error_diag() ) {
 		print "Error\n";
@@ -204,15 +228,45 @@ while ( my $row = $csv->getline( $fh ) )
 	$output_title = $wc->html2wiki( $in_output_title );
 
 	#### Entry Text
-	my $output_text;
+	my $output_text; 
+	my $input_text = $row->[$text];
+
+	#
+	## Entry Text massaging
+	#
+	# First, to deal with keeping comments, which are important to me here,
+	# substitute <!-- with [!-- and --> with --].  These will show up in the resulting markdown as is
+
+	$input_text =~ s/<!--/[!--/g;
+	$input_text =~ s/-->/--]/g;
+
+	# Another thing that I need to clean up is that some entries in the original blog were set up 
+	# with 'markdown_with_smartypants' or 'markdown' set for the convert_breaks field.  
+	# If this is the case, we
+	$input_text =~ s/(^|\n)[\n\s]*/\n<\/p>$1<p>\n/g;
+
+	## HTML -> Markdown
 	# convert from html to markdown
-	$output_text = $wc->html2wiki( $row->[$text] );
-	
+	$output_text = $wc->html2wiki( $input_text );
+
 	# If there's something in the 'text_more' colume add it after
 	# I believe none of my entries have the text_more, but if they do, this deals with it
 	if( $row->[$text_more] ne "" ) {
 		$output_text .= "\n\n" . $wc->html2wiki( $row->[$text_more] );
 	}
+
+	# Also add in an <em> </em> there to emphasize it in the outputting marked up text as well
+	# but we can't do this before since the only way it seems to get *emphasis* is if the stars
+	# are right next to the words.  Luckily we can add literal HTML (<em>) in our just-converted 
+	# markdown.  Kinda messed up but hey, it works.
+
+	$output_text =~ s/\[!--/[!--<em>/g;
+	$output_text =~ s/--\]/<\/em>--]/g;
+
+	# and fix <br />'s
+	$output_text =~ s/<br \/>/<br>/g;
+
+
 
 	#### Tags and Keywords
 	# Movable type has the concept of both "tags" and "keywords".  I'm going to convert
@@ -266,38 +320,50 @@ $output_title
 $output_text
 END
 
-	# Create a file to write this to
-	my $filename = "entry-$line.txt";
-	open( my $fh, '>', $filename ) or die("Can't open file: $filename - $!");
-
-	#### Output the entry to a file (or somewhere else if you write it to a file)
-	print $fh $entry;
-
-	# Close the file
-	close $fh;
-
-	# finally call the dayone2 command on the command line with arguments for the date, tags, etc
-	my $command = "cat $filename | $dayoneexecutable --journal \"$journalname\" --date='$output_date_time' --tags $cli_output_tags -- new";
-
-	my $output = `$command`;
-	if( $output =~ /Created new entry with uuid/ ) {
-		print "Successfully created entry $line ($output_date_time)\n";
-	} else {
-		# ERROR!!
-		die "Error creating entry :( \n$output\n\n";
+	if( $output_to_console ) {
+		print "DEBUG: INPUT\n---\n$input_text\n\n----\n";
+		print "DEBUG: OUTPUT\n---\n$entry\n\n----\n";
 	}
 
-	# finally remove the file
-	unlink $filename;
+	# If we're doing this for real, create the files and run the command to import them
+	if( !$dryrun ) 
+	{
+		# Create a file to write this to
+		my $filename = "entry-$line.txt";
+		open( my $fh, '>', $filename ) or die("Can't open file: $filename - $!");
+
+		#### Output the entry to a file (or somewhere else if you write it to a file)
+		print $fh $entry;
+
+		# Close the file
+		close $fh;
+
+		# finally call the dayone2 command on the command line with arguments for the date, tags, etc
+		my $command = "cat $filename | $dayoneexecutable --journal \"$journalname\" --date='$output_date_time' --tags $cli_output_tags -- new";
+
+		my $output = `$command`;
+		if( $output =~ /Created new entry with uuid/ ) {
+			print "Successfully created entry $line ($output_date_time)\n";
+			if( $debug ) { print "DEBUG: $output\n"; }
+		} else {
+			# ERROR!!
+			die "Error creating entry :( \n$output\n\n";
+		}
+
+		# finally remove the file
+		unlink $filename;
+	} 
+	else {
+		print "Dry run, not creating day one entry for line $line\n";
+	}
 
 	# For testing we can stop at a certain point to check the results or do a test import
-	last if $line > 10;
-
-	# and we're done, lets do the next one
-
+	if( $short_run ) {
+		last if $line > $short_run;
+	}
 }
 
 ### Done
 ## NOTE: if you uncomment these remmeber they'll be at the end of your last imported entry
-#print "Done!\n";
-#print "Processed $line entries\n\n";
+print "Done!\n";
+print "Processed $line entries\n\n";
