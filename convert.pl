@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use HTML::WikiConverter;
+use HTML::Clean;
 use Text::CSV;
 use Data::Dumper;
 use DateTime::Format::Strptime;
@@ -8,8 +9,8 @@ use DateTime::Format::Strptime;
 =pod
 ## TODO ##
  - Does markdown do underlines? - NO
- - Some entries don't have <P> and it's fucking up *some* entries
- - Have to go in manually to fix the <tt><pre> code and convert it to code ```xxx``` in markdown after the fact
+ - Images are coming in with set proportions that make them look distorted
+ - Automatically remove "flair" around image tags?
  - Have to do a spot check and fix some <dl><dd> -> quote blocks, missing images, and some formatting issues
  	that have resulted from converting code to colorful code (but that is converted into markdown which doesn't 
 	work
@@ -130,12 +131,11 @@ my $dryrun = 1;
 # output the entry to the console?
 my $output_to_console = 1;
 
-# looking for a specific id for the entry?
-my $specific_entry = 4315;
+# 0 for all, id number (not line) if you're looking for a specific entry
+my $specific_entry = 4332;
 
 # debugging and only want to output X entries before stopping (empty = all, number = that number)
-my $short_run = "10";
-
+my $short_run = "";
 
 # Is there a default tag you want to add to each entry to identify the 
 # imported entries somehow?
@@ -172,8 +172,13 @@ my $parser = DateTime::Format::Strptime->new(
 # Open the file and reference it with a filehandle
 open my $fh, "<:encoding(utf8)", $filename or die "$filename: $!";
 
-# Set a counter for each line
+# Set a counter for each line and each entry processed and failed
 my $line = 0;
+my $processed = 0;
+my $failed = 0;
+
+# Counter for already in markdown 
+my $entries_in_markdown = 0;
 
 # First read first line so we don't try to read the headers
 my $header = <$fh>;
@@ -182,6 +187,8 @@ my $header = <$fh>;
 while ( my $row = $csv->getline( $fh ) ) 
 {
 	$line++;
+	next if $line < 2304;
+
 
 	# are we debugging and only looking for a specific entry?
 	if( $specific_entry ) { 
@@ -231,6 +238,9 @@ while ( my $row = $csv->getline( $fh ) )
 	my $output_text; 
 	my $input_text = $row->[$text];
 
+	if( $output_to_console ) {
+		print "DEBUG: INPUT\n---\n$input_text\n\n----\n";
+	}
 	#
 	## Entry Text massaging
 	#
@@ -242,12 +252,21 @@ while ( my $row = $csv->getline( $fh ) )
 
 	# Another thing that I need to clean up is that some entries in the original blog were set up 
 	# with 'markdown_with_smartypants' or 'markdown' set for the convert_breaks field.  
-	# If this is the case, we
-	$input_text =~ s/(^|\n)[\n\s]*/\n<\/p>$1<p>\n/g;
+	# If this is the case, we have to make sure we *don't* run the conversion.
+	my $entry_is_markdown = 0;
+	if( $row->[$convert_breaks] =~ /markdown/i ) {
+		$entry_is_markdown = 1;
+		$entries_in_markdown++;
+		print "DEBUG: Entry $row->[$id] is already markdown - line $line ($row->[$convert_breaks])\n";
+	}
 
 	## HTML -> Markdown
-	# convert from html to markdown
-	$output_text = $wc->html2wiki( $input_text );
+	# convert from html to markdown if we need to
+	if( $entry_is_markdown ) {
+		$output_text = $input_text;
+	} else {
+		$output_text = $wc->html2wiki( $input_text );
+	}
 
 	# If there's something in the 'text_more' colume add it after
 	# I believe none of my entries have the text_more, but if they do, this deals with it
@@ -303,7 +322,6 @@ while ( my $row = $csv->getline( $fh ) )
 		# do substitution only if the tag has a space in it
 		if( $_ =~ /\S\s\S/) { 
 			$cli_tag =~ s/\s/\\ /g;
-			$foo = 1;
 		}
 
 		$cli_output_tags .= $cli_tag . " ";
@@ -311,7 +329,7 @@ while ( my $row = $csv->getline( $fh ) )
 
 	# trim whitespace from both sides
 	$cli_output_tags =~ s/^\s+|\s+$//g;
-	if( $foo == 1 ) { print "'$cli_output_tags'\n"; }
+	#if( $foo == 1 ) { print "'$cli_output_tags'\n"; }
 
 	#### Final entry creating
 	# Now create the entry from the template that we got from Day One
@@ -321,7 +339,6 @@ $output_text
 END
 
 	if( $output_to_console ) {
-		print "DEBUG: INPUT\n---\n$input_text\n\n----\n";
 		print "DEBUG: OUTPUT\n---\n$entry\n\n----\n";
 	}
 
@@ -343,10 +360,12 @@ END
 
 		my $output = `$command`;
 		if( $output =~ /Created new entry with uuid/ ) {
-			print "Successfully created entry $line ($output_date_time)\n";
+			print "Successfully created entry $line ('$output_title' / $output_date_time)\n";
+			$processed++;
 			if( $debug ) { print "DEBUG: $output\n"; }
 		} else {
 			# ERROR!!
+			$failed++;
 			die "Error creating entry :( \n$output\n\n";
 		}
 
@@ -366,4 +385,7 @@ END
 ### Done
 ## NOTE: if you uncomment these remmeber they'll be at the end of your last imported entry
 print "Done!\n";
-print "Processed $line entries\n\n";
+print "Successful       = $processed\n";
+print "Failed :(        = $failed\n";
+print "Total inputs     = $line\n";
+print "Already Markdown = $entries_in_markdown\n";
