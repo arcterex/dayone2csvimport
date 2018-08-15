@@ -265,6 +265,8 @@ while ( my $row = $csv->getline( $fh ) )
 	if( $entry_is_markdown ) {
 		$output_text = $input_text;
 	} else {
+		# Clean up the HTML first
+
 		$output_text = $wc->html2wiki( $input_text );
 	}
 
