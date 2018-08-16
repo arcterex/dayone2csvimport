@@ -10,8 +10,11 @@ my $base_url = 'http://arcterex.net';
 my $wc = new HTML::WikiConverter( 
 	dialect => 'Markdown',
 	link_style  => 'inline',
+	image_style => 'inline',
 	base_uri    => $base_url,
-	strip_empty_tags => 1,
+	image_tag_fallback => 0,
+	escape_entities => 1,
+	md_extra => 1,
 );  
 
 my $s = <<'END';
@@ -21,14 +24,28 @@ my $s = <<'END';
 <p><a href="http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%2010-62.html" onclick="window.open('http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%2010-62.html','popup','width=900,height=634,scrollbars=no,resizable=no,toolbar=no,directories=no,location=no,menubar=no,status=no,left=0,top=0'); return false"><img src="http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%2010-thumb-500x352-62.jpg" width="500" height="352" alt="king rd apartment - corny 10.jpg" class="mt-image-center" style="text-align: center; display: block; margin: 0 auto 20px;" /></a><a href="http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%203-65.html" onclick="window.open('http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%203-65.html','popup','width=900,height=603,scrollbars=no,resizable=no,toolbar=no,directories=no,location=no,menubar=no,status=no,left=0,top=0'); return false"><img src="http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%203-thumb-500x335-65.jpg" width="500" height="335" alt="king rd apartment - corny 3.jpg" class="mt-image-center" style="text-align: center; display: block; margin: 0 auto 20px;" /></a>He was my first "real" cat and was with me for almost as many years as he wasn't. I miss him but am happy for the time I had with him cuddling on the couch or sleeping on my shoulder at night and purring.</p>
 END
 
+$s = <<'END';
+The "out of box" experience is good, the shipping box is unique, fits the watch well, and there was no shifting of the watch.  There was no documentation inside, no quick start guide, but I suppose if you're the sort of person who guys a Smartwatch off of the internet via Kickstarter, you can figure stuff out yourself.  The watch is smaller than I thought it would be, but still not "tiny".  Definitely not a downside.  
+
+<a href="http://arcterex.net/blog/assets_c/2013/02/IMG_2659-50.html" onclick="window.open('http://arcterex.net/blog/assets_c/2013/02/IMG_2659-50.html','popup','width=3264,height=2448,scrollbars=no,resizable=no,toolbar=no,directories=no,location=no,menubar=no,status=no,left=0,top=0'); return false"><img src="http://arcterex.net/blog/assets_c/2013/02/IMG_2659-thumb-500x375-50.jpg" width="500" height="375" alt="Pebble in Package" class="mt-image-center" style="text-align: center; display: block; margin: 0 auto 20px;" /></a>
+
+The screen is just the right size I think, or pretty close to it.  The wrist strap is less "plastic-y" than I thought.  Seeing the reviews didn't prepare me for the soft plastic that it is made out of. Not low quality as far as I can tell (not being a plastics expert), and pleasant against the wrist.
+
+END
+
+$s = <<'END';
+<p><a href="http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%2010-62.html" onclick="window.open('http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%2010-62.html','popup','width=900,height=634,scrollbars=no,resizable=no,toolbar=no,directories=no,location=no,menubar=no,status=no,left=0,top=0'); return false"><img src="http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%2010-thumb-500x352-62.jpg" width="500" height="352" alt="king rd apartment - corny 10.jpg" class="mt-image-center" style="text-align: center; display: block; margin: 0 auto 20px;" /></a><a href="http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%203-65.html" onclick="window.open('http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%203-65.html','popup','width=900,height=603,scrollbars=no,resizable=no,toolbar=no,directories=no,location=no,menubar=no,status=no,left=0,top=0'); return false"><img src="http://arcterex.net/blog/assets_c/2013/05/king%20rd%20apartment%20-%20corny%203-thumb-500x335-65.jpg" width="500" height="335" alt="king rd apartment - corny 3.jpg" class="mt-image-center" style="text-align: center; display: block; margin: 0 auto 20px;" /></a>He was my first "real" cat and was with me for almost as many years as he wasn't. I miss him but am happy for the time I had with him cuddling on the couch or sleeping on my shoulder at night and purring.</p>
+
+END
+
 $s =~ s/(^|\n)[\n\s]*/\n<\/p>$1<p>\n/g;
-#print "INPUT\n----\n$s\n";
+print "INPUT\n----\n$s\n";
 
 # clean html
 print "\n-----\nCLEANING ... \n\n";
 my $parser = HTML::TokeParser::Simple->new( string => $s);
+my $cleaned;
 
-my $cleaned = "";
 while( my $token = $parser->get_token ) {
 # clean up the image tag
 	if( $token->is_tag('img')) {
@@ -38,28 +55,22 @@ while( my $token = $parser->get_token ) {
 		$token->delete_attr('style');
 	}
 
-	# now clean up the a href tags *if* they are popups for images
-	if( $token->is_tag('a') ) {
-		print "Found A\n";
-		print Dumper $token;
-		if( $token->get_attr('onclick') ) { 
-			print "Found onclick\n";
-			print "Next 3:\n";
-			print Dumper $parser->peek(3);
-			print "END\n";
-			next;
-		}
-	}
-
-
 	$cleaned .= $token->as_is;
 }
 
-$s = $cleaned;
+# Now modify the cleaned text and use a regex to replace:
+# <a href onclick=.*><img.*></a>
+# with
+# <img.*>
+$cleaned =~ s/<a href=.*?>(<img.*?>)<\/a>/$1/g;
 
-print "\n-----\nCLEANED\n------\n$cleaned\n------\n";
+#$s = $cleaned;
+
+
+print "\n-----\nCLEANED\n------\n$s\n------\n";
 my $output_text = $wc->html2wiki($s); 
 print "\n-----\nOUTPUT:\n";
 print $output_text . "\n";
+print "\n-----\nEND OUTPUT\n";
 
 exit;

@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use HTML::WikiConverter;
+use HTML::TokeParser::Simple;
 use HTML::Clean;
 use Text::CSV;
 use Data::Dumper;
@@ -113,26 +114,30 @@ my $filename = "entries.csv";
 my $base_url = "http://arcterex.net";
 
 # Give the CSV column numbers some names so addressing fields in the array is easier
-my $id 					= 0;
-my $title 				= 5;
-my $authored_on 		= 10;
-my $convert_breaks 	= 15;
-my $keywords 			= 22;
-my $tags_list 			= 29;
-my $text 				= 30;
-my $text_more 			= 31;
+my $id 							= 0;
+my $title 						= 5;
+my $authored_on 				= 10;
+my $categories_secondary 	= 13;
+my $convert_breaks 			= 15;
+my $keywords 					= 22;
+my $tags_list 					= 29;
+my $text 						= 30;
+my $text_more 					= 31;
 
 # Debug 1 or 0 - currently doesn't do much
-my $debug = 1;
+my $debug = 0;
 
 # Are we doing this for real?  1 = no, 0 = yes
-my $dryrun = 1;
+my $dryrun = 0;
 
 # output the entry to the console?
-my $output_to_console = 1;
+my $output_to_console = 0;
+
+# are we debugging the tags?
+my $print_tags_to_console = 0;
 
 # 0 for all, id number (not line) if you're looking for a specific entry
-my $specific_entry = 4332;
+my $specific_entry = undef;
 
 # debugging and only want to output X entries before stopping (empty = all, number = that number)
 my $short_run = "";
@@ -159,6 +164,8 @@ my $csv = Text::CSV->new ( {
 my $wc = new HTML::WikiConverter( 
 	dialect 		=> 'Markdown', 
 	link_style 	=> 'inline',
+	image_style => 'inline',
+	image_tag_fallback => 0,
 	base_uri 	=> $base_url,
 	);
 
@@ -187,8 +194,6 @@ my $header = <$fh>;
 while ( my $row = $csv->getline( $fh ) ) 
 {
 	$line++;
-	next if $line < 2304;
-
 
 	# are we debugging and only looking for a specific entry?
 	if( $specific_entry ) { 
@@ -260,13 +265,18 @@ while ( my $row = $csv->getline( $fh ) )
 		print "DEBUG: Entry $row->[$id] is already markdown - line $line ($row->[$convert_breaks])\n";
 	}
 
+## Clean the tags
+# Some of the entries have window pop up's in HTML - even if it's in Markdown
+# So we have to parse through the tags and:
+#  - remove the extra attributes from IMG tags
+#  - remove the a href onclick tags around IMG tags
+	$input_text = clean_img_tags( $input_text );
+
 	## HTML -> Markdown
 	# convert from html to markdown if we need to
 	if( $entry_is_markdown ) {
 		$output_text = $input_text;
 	} else {
-		# Clean up the HTML first
-
 		$output_text = $wc->html2wiki( $input_text );
 	}
 
@@ -287,8 +297,6 @@ while ( my $row = $csv->getline( $fh ) )
 	# and fix <br />'s
 	$output_text =~ s/<br \/>/<br>/g;
 
-
-
 	#### Tags and Keywords
 	# Movable type has the concept of both "tags" and "keywords".  I'm going to convert
 	# all of them into the #tags that DayOne supports
@@ -305,8 +313,12 @@ while ( my $row = $csv->getline( $fh ) )
 	# ... and the keywords as well
 	my @keyword_list_array = split /\s*,\s*/, $row->[$keywords];
 
+	# ... and the categories as well
+	my @categories_list_array = split /\s*,\s*/, $row->[$categories_secondary];
+
+
 	# load everything into the tags array
-	my @outtags = (@tags, @tag_list_array, @keyword_list_array);
+	my @outtags = (@tags, @tag_list_array, @keyword_list_array, @categories_list_array);
 
 	# Now create the string from the array
 	my $output_tags = "";
@@ -315,7 +327,6 @@ while ( my $row = $csv->getline( $fh ) )
 	# so #foo #bar baz turns in "foo bar\ baz"
 	my $cli_output_tags = "";
 
-	my $foo = 0;
 	foreach( @outtags ) { 
 		$output_tags .= "#$_ ";
 		# now deal with tags for the command line
@@ -331,7 +342,9 @@ while ( my $row = $csv->getline( $fh ) )
 
 	# trim whitespace from both sides
 	$cli_output_tags =~ s/^\s+|\s+$//g;
-	#if( $foo == 1 ) { print "'$cli_output_tags'\n"; }
+	if( $print_tags_to_console ) { 
+		print "DEBUG: Tags list: '$cli_output_tags'\n"; 
+	}
 
 	#### Final entry creating
 	# Now create the entry from the template that we got from Day One
@@ -382,6 +395,42 @@ END
 	if( $short_run ) {
 		last if $line > $short_run;
 	}
+}
+
+# Clean input by removing extra attributes from img tags as well as 
+# removing the a href onclick surrounding an img tag
+sub clean_img_tags
+{
+	my $input = shift;
+	my $cleaning = $input;
+	my $cleaned = "";
+	my $output = "";
+
+	# Now modify the cleaned text and use a regex to replace:
+	# <a href onclick=.*><img.*></a>
+	# with
+	# <img.*>
+	$cleaning =~ s/<a href=.*?>(<img.*?>)<\/a>/$1/g;
+
+	# Now clean up the IMG tag
+	my $parser = HTML::TokeParser::Simple->new( string => $cleaning );
+
+	# clean up the image tag
+	while( my $token = $parser->get_token ) {
+		if( $token->is_tag('img')) {
+			$token->delete_attr('width');
+			$token->delete_attr('height');
+#			$token->delete_attr('alt');
+			$token->delete_attr('class');
+			$token->delete_attr('style');
+		}
+
+		$cleaned .= $token->as_is;
+	}
+
+	$output = $cleaned;
+	
+	return $output;
 }
 
 ### Done
