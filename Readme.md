@@ -135,4 +135,9 @@ the various entries for things such as:
  	nested <tt> and <blockquote> tags to create an HTML aware console display don't work.  I 
 	haven't found a way to get Markdown to let me do this (I want a code block that will interpret
 	some markup, such as **bold**.
-
+ - Overall spot check.  This does a good job to get the bulk of your data in there, but if you 
+ 	are concerned about it being **right** you'll need to go through each entry and at least give 
+	it a cursory look to make sure it's not completely blown up
+ - Fix any HTML that's *very* HTML-ized.  For example at some point I used a program that would
+ 	color code code with html... worked great on a web page, with colored variables, formatting,
+	etc, but that doesn't come back across into Day One all that well. 
