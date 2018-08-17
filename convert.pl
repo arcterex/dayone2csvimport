@@ -30,7 +30,7 @@ my $text_more 					= 31;
 my $debug = 0;
 
 # Are we doing this for real?  1 = no, 0 = yes
-my $dryrun = 0;
+my $dryrun = 1;
 
 # output the entry to the console?
 my $output_to_console = 0;
@@ -39,10 +39,16 @@ my $output_to_console = 0;
 my $print_tags_to_console = 0;
 
 # 0 for all, id number (not line) if you're looking for a specific entry
-my $specific_entry = undef;
+my $specific_entry = 0;
 
 # debugging and only want to output X entries before stopping (empty = all, number = that number)
-my $short_run = "";
+my $short_run = 0;
+
+# maybe we want to do a range for the lines
+my $range = {
+	'start' => undef,
+	'end'   => undef,
+	};
 
 # Is there a default tag you want to add to each entry to identify the 
 # imported entries somehow?
@@ -86,8 +92,8 @@ my $line = 0;
 my $processed = 0;
 my $failed = 0;
 
-# Counter for already in markdown 
-my $entries_in_markdown = 0;
+# Counter for formatting types
+my $formatting;
 
 # First read first line so we don't try to read the headers
 my $header = <$fh>;
@@ -101,6 +107,17 @@ while ( my $row = $csv->getline( $fh ) )
 	if( $specific_entry ) { 
 		next if( $row->[$id] ne $specific_entry );
 		print "DEBUG: Only printing entry ID #$specific_entry\n" if $debug;
+	}
+	
+	# are we only doing a certain range?
+	if( $range->{start} && $range->{end} ) 
+	{
+		if( $line < $range->{start} ) {
+			next;
+		}
+		if( $line > $range->{end} ) {
+			last;
+		}
 	}
 
 	# Error checking if something went wrong
@@ -161,25 +178,68 @@ while ( my $row = $csv->getline( $fh ) )
 	# with 'markdown_with_smartypants' or 'markdown' set for the convert_breaks field.  
 	# If this is the case, we have to make sure we *don't* run the conversion.
 	my $entry_is_markdown = 0;
-	if( $row->[$convert_breaks] =~ /markdown/i ) {
-		$entry_is_markdown = 1;
-		$entries_in_markdown++;
-		print "DEBUG: Entry $row->[$id] is already markdown - line $line ($row->[$convert_breaks])\n";
+	my $entry_is_default = 0;
+	my $format = $row->[$convert_breaks];
+
+	print "DEBUG: Entry ID $row->[$id] line $line formatting is $format ($row->[$convert_breaks])\n";
+
+	# keep count of how many of what
+	$formatting->{$format}++;
+
+	# we'll need some rules about what to do depending on the markup
+	my $convert_html = 0;		# straight html
+	my $convert_html_no_p = 0;	# html without <p> tags
+	my $no_conversion = 0;		# markdown
+
+	if( $format =~ /markdown/i ) 
+	{
+		$no_conversion = 1;
+	} 
+	elsif( $format =~ /__default_/i )  #some are __default__ and some are __default_
+	{
+		$convert_html_no_p = 1;
+	} 
+	elsif( $format =~ /richtext/i ) {
+		$convert_html = 1;
+	}
+	elsif( $format eq "0" or $format eq "1" ) {
+		$convert_html = 1;
+	}
+	elsif( $format eq "" ){
+		$convert_html = 1;
+	}
+	else
+	{
+		print "DEBUG: Unknown formatting! $format\n";
 	}
 
-## Clean the tags
-# Some of the entries have window pop up's in HTML - even if it's in Markdown
-# So we have to parse through the tags and:
-#  - remove the extra attributes from IMG tags
-#  - remove the a href onclick tags around IMG tags
+
+	## Clean the tags
+	# Some of the entries have window pop up's in HTML - even if it's in Markdown
+	# So we have to parse through the tags and:
+	#  - remove the extra attributes from IMG tags
+	#  - remove the a href onclick tags around IMG tags
 	$input_text = clean_img_tags( $input_text );
 
+	# now implement the formatting rules, no conversion, html, or html w/o <p> tags
 	## HTML -> Markdown
 	# convert from html to markdown if we need to
-	if( $entry_is_markdown ) {
+	if( $no_conversion == 1) 
+	{
+		print "DEBUG: Entry is Markdown - doing nothing\n" if $debug;
 		$output_text = $input_text;
-	} else {
+	} 
+	elsif( $convert_html == 1 ) 
+	{
+		print "DEBUG: Entry is HTML - converting\n" if $debug;
 		$output_text = $wc->html2wiki( $input_text );
+	}
+	elsif( $convert_html_no_p == 1) {
+		print "DEBUG: Entry is HTML w/o <p> - add <p> and convert\n" if $debug;
+
+		my $temp_text = add_p_tags($input_text);
+
+		$output_text = $wc->html2wiki( $temp_text );
 	}
 
 	# If there's something in the 'text_more' colume add it after
@@ -221,6 +281,11 @@ while ( my $row = $csv->getline( $fh ) )
 
 	# load everything into the tags array
 	my @outtags = (@tags, @tag_list_array, @keyword_list_array, @categories_list_array);
+
+	# Make sure the tags are all unique
+	my %seen =() ;
+	my @unique_outtags = grep { ! $seen{$_}++ } @outtags ;
+	@outtags = @unique_outtags;
 
 	# Now create the string from the array
 	my $output_tags = "";
@@ -277,7 +342,7 @@ END
 
 		my $output = `$command`;
 		if( $output =~ /Created new entry with uuid/ ) {
-			print "Successfully created entry $line ('$output_title' / $output_date_time)\n";
+			print "Successfully created entry for line $line ('" . $row->[$id] . " / $output_title' / $output_date_time)\n";
 			$processed++;
 			if( $debug ) { print "DEBUG: $output\n"; }
 		} else {
@@ -290,7 +355,7 @@ END
 		unlink $filename;
 	} 
 	else {
-		print "Dry run, not creating day one entry for line $line\n";
+		print "Dry run, not creating day one entry for line $line (id:" . $row->[$id] . ")\n";
 	}
 
 	# For testing we can stop at a certain point to check the results or do a test import
@@ -298,6 +363,7 @@ END
 		last if $line > $short_run;
 	}
 }
+### Done!!!
 
 # Clean input by removing extra attributes from img tags as well as 
 # removing the a href onclick surrounding an img tag
@@ -335,10 +401,23 @@ sub clean_img_tags
 	return $output;
 }
 
-### Done
+# We need to wrap the incoming text so that empty lines are replaced with </p><p>
+sub add_p_tags
+{
+	my $incoming_text = shift @_;
+	print "DEBUG: convert IN \n----\n$incoming_text\n";
+	$incoming_text =~ s/(?!^<\/p><p>)([\r\n]){2,}/\n<\/p><p>\n/g;
+	print "DEBUG: convert OUT \n----\n$incoming_text\n";
+	$incoming_text = $wc->html2wiki( $incoming_text );
+	print "DEBUG: convert OUT \n----\n$incoming_text\n";
+	return $incoming_text;
+}
+
 ## NOTE: if you uncomment these remmeber they'll be at the end of your last imported entry
 print "Done!\n";
 print "Successful       = $processed\n";
 print "Failed :(        = $failed\n";
 print "Total inputs     = $line\n";
-print "Already Markdown = $entries_in_markdown\n";
+print "Formatting       = ";
+print Dumper $formatting;
+print "\n";
