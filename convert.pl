@@ -13,9 +13,10 @@ my $filename = "entries.csv";
 
 # If you have html that just references pages (ie: <a href="foo.html">foo</a>) 
 # this is the URL to use as a base for it in the html2wiki converter
-my $base_url = "http://arcterex.net";
+my $base_url = "http://mysite.com";
 
 # Give the CSV column numbers some names so addressing fields in the array is easier
+# See the README.md file for more information about this and what these really mean.
 my $id 							= 0;
 my $title 						= 5;
 my $authored_on 				= 10;
@@ -27,16 +28,16 @@ my $text 						= 30;
 my $text_more 					= 31;
 
 # Debug 1 or 0 - currently doesn't do much
-my $debug = 0;
+my $debug = 1;
 
 # Are we doing this for real?  1 = no, 0 = yes
-my $dryrun = 0;
+my $dryrun = 1;
 
 # output the entry to the console?
-my $output_to_console = 0;
+my $output_to_console = 1;
 
 # are we debugging the tags?
-my $print_tags_to_console = 0;
+my $print_tags_to_console = 1;
 
 # 0 for all, id number (not line) if you're looking for a specific entry
 my $specific_entry = 0;
@@ -51,17 +52,35 @@ my $line_range = {
 	};
 # or entry ID range
 my $id_range = {
-	'start' => 0,
-	'end'   => 4291,
+	'start' => undef,
+	'end'   => undef,
 	};
 
 # Is there a default tag you want to add to each entry to identify the 
 # imported entries somehow?
 my $default_tag = "OldBlogEntry";
 
-# Other system variables
+## Other system variables
+# What's the Day One executable and path (if applicable)
 my $dayoneexecutable = "dayone2";
+# What journal are we putting the entries into?
 my $journalname = 'Old Blog';
+
+# Make sure that people know they're getting into a world of hurt using this
+$this_is_stupid = 1;
+if( $this_is_stupid ) {
+	print <<'STUPIDSHIT'
+I acknowledge that I understand this is not meant for anyone but the author 
+and will probably blow all my shit up, and I'm going to remove this clause 
+in the code ONLY when I understand what the hell I'm doing and why this is 
+not a good idea at all.
+
+Here there be dragons.
+
+Seriously, don't do it.";
+STUPIDSHIT
+	die();
+}
 
 #### Create the parsing objects
 # Create the CSV parser that will be fed the input file filehandle 
