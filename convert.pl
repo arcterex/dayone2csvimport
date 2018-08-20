@@ -30,7 +30,7 @@ my $text_more 					= 31;
 my $debug = 0;
 
 # Are we doing this for real?  1 = no, 0 = yes
-my $dryrun = 1;
+my $dryrun = 0;
 
 # output the entry to the console?
 my $output_to_console = 0;
@@ -45,9 +45,14 @@ my $specific_entry = 0;
 my $short_run = 0;
 
 # maybe we want to do a range for the lines
-my $range = {
+my $line_range = {
 	'start' => undef,
 	'end'   => undef,
+	};
+# or entry ID range
+my $id_range = {
+	'start' => 0,
+	'end'   => 4291,
 	};
 
 # Is there a default tag you want to add to each entry to identify the 
@@ -109,16 +114,33 @@ while ( my $row = $csv->getline( $fh ) )
 		print "DEBUG: Only printing entry ID #$specific_entry\n" if $debug;
 	}
 	
+	# NOTE: $line_range and $id_range don't really work together, 
+	# one has to be undef if you're using the other
 	# are we only doing a certain range?
-	if( $range->{start} && $range->{end} ) 
+	if( $line_range->{start} && $line_range->{end} ) 
 	{
-		if( $line < $range->{start} ) {
+		if( $line < $line_range->{start} ) {
 			next;
 		}
-		if( $line > $range->{end} ) {
+		if( $line > $line_range->{end} ) {
 			last;
 		}
 	}
+
+	# or by id
+	if( defined $id_range->{start} && defined $id_range->{end} ) 
+	{
+		if( $row->[$id] < $id_range->{start} ) {
+			print "$row->[$id] < $id_range->{start}\n";
+			next;
+		}
+		if( $row->[$id] > $id_range->{end} ) {
+			# in case the IDs are out of order don't just do a last() here
+			print "$row->[$id] > $id_range->{end}\n";
+			next;
+		}
+	}
+
 
 	# Error checking if something went wrong
 	if( $csv->error_diag() ) {
@@ -181,7 +203,7 @@ while ( my $row = $csv->getline( $fh ) )
 	my $entry_is_default = 0;
 	my $format = $row->[$convert_breaks];
 
-	print "DEBUG: Entry ID $row->[$id] line $line formatting is $format ($row->[$convert_breaks])\n";
+	print "DEBUG: Entry ID $row->[$id] line $line formatting is $format ($row->[$convert_breaks])\n" if $debug;
 
 	# keep count of how many of what
 	$formatting->{$format}++;
@@ -228,11 +250,21 @@ while ( my $row = $csv->getline( $fh ) )
 	{
 		print "DEBUG: Entry is Markdown - doing nothing\n" if $debug;
 		$output_text = $input_text;
+
+		if( $row->[$text_more] =~ /\S+/ ) {
+			my $more_text = $row->[$text_more];
+			$output_text .= "\n---\n" . $wc->html2wiki( $more_text );
+		}
 	} 
 	elsif( $convert_html == 1 ) 
 	{
 		print "DEBUG: Entry is HTML - converting\n" if $debug;
 		$output_text = $wc->html2wiki( $input_text );
+
+		if( $row->[$text_more] =~ /\S+/ ) {
+			my $more_text = $row->[$text_more];
+			$output_text .= "\n---\n" . $wc->html2wiki( $more_text );
+		}
 	}
 	elsif( $convert_html_no_p == 1) {
 		print "DEBUG: Entry is HTML w/o <p> - add <p> and convert\n" if $debug;
@@ -240,12 +272,14 @@ while ( my $row = $csv->getline( $fh ) )
 		my $temp_text = add_p_tags($input_text);
 
 		$output_text = $wc->html2wiki( $temp_text );
-	}
 
-	# If there's something in the 'text_more' colume add it after
-	# I believe none of my entries have the text_more, but if they do, this deals with it
-	if( $row->[$text_more] ne "" ) {
-		$output_text .= "\n\n" . $wc->html2wiki( $row->[$text_more] );
+		# Add on extra text if there's something there
+		# TODO - make this better handled
+		if( $row->[$text_more] =~ /\S+/ ) {
+			my $temp_more = $row->[$text_more];
+			my $more_out = add_p_tags($temp_more);
+			$output_text .= "\n---\n" . $wc->html2wiki( $more_out );
+		}
 	}
 
 	# Also add in an <em> </em> there to emphasize it in the outputting marked up text as well
@@ -355,7 +389,7 @@ END
 		unlink $filename;
 	} 
 	else {
-		print "Dry run, not creating day one entry for line $line (id:" . $row->[$id] . ")\n";
+		print "Dry run, not creating day one entry for line $line (id: " . $row->[$id] . " / '$output_title')\n";
 	}
 
 	# For testing we can stop at a certain point to check the results or do a test import
@@ -404,12 +438,21 @@ sub clean_img_tags
 # We need to wrap the incoming text so that empty lines are replaced with </p><p>
 sub add_p_tags
 {
+	my $wc2 = new HTML::WikiConverter( 
+			base_uri 	=> $base_url,
+			dialect => 'Markdown',
+			link_style  => 'inline',
+			image_style => 'inline',
+			base_uri    => $base_url,
+			image_tag_fallback => 0,
+			escape_entities => 1,
+			md_extra => 1,
+		);
 	my $incoming_text = shift @_;
-	print "DEBUG: convert IN \n----\n$incoming_text\n";
-	$incoming_text =~ s/(?!^<\/p><p>)([\r\n]){2,}/\n<\/p><p>\n/g;
-	print "DEBUG: convert OUT \n----\n$incoming_text\n";
-	$incoming_text = $wc->html2wiki( $incoming_text );
-	print "DEBUG: convert OUT \n----\n$incoming_text\n";
+	# magic from https://www.perlmonks.org/?node_id=591605
+	$incoming_text =~ s/(?!^<p>)([\r\n]){2,}/\n<p>\n/g;
+#	$incoming_text =~ s/(^|\n)[\n\s]*/\n<\/p>$1<p>\n/g;
+
 	return $incoming_text;
 }
 
