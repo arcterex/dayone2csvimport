@@ -138,10 +138,10 @@ the various entries for things such as:
 
  - converting <img> HTML tags that reference images online to dragging the actual images in so they 
    are "native" images in Day One
- - formatting needs cleaning still.  I've found errant <br />'s, and some formatting such as 
- 	nested <tt> and <blockquote> tags to create an HTML aware console display don't work.  I 
+ - formatting needs cleaning still.  I've found errant \<br /\>'s, and some formatting such as 
+ 	nested \<tt\> and \<blockquote\> tags to create an HTML aware console display don't work.  I 
 	haven't found a way to get Markdown to let me do this (I want a code block that will interpret
-	some markup, such as **bold**.
+	some markup, such as \*\*bold\*\*).
  - Overall spot check.  This does a good job to get the bulk of your data in there, but if you 
  	are concerned about it being **right** you'll need to go through each entry and at least give 
 	it a cursory look to make sure it's not completely blown up
