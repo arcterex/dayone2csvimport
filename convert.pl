@@ -67,9 +67,9 @@ my $dayoneexecutable = "dayone2";
 my $journalname = 'Old Blog';
 
 # Make sure that people know they're getting into a world of hurt using this
-$this_is_stupid = 1;
-if( $this_is_stupid ) {
-	print <<'STUPIDSHIT'
+my $this_is_stupid = 0;
+if( $this_is_stupid != 0 ){
+	print <<'STUPIDSHIT';
 I acknowledge that I understand this is not meant for anyone but the author 
 and will probably blow all my shit up, and I'm going to remove this clause 
 in the code ONLY when I understand what the hell I'm doing and why this is 
@@ -79,6 +79,7 @@ Here there be dragons.
 
 Seriously, don't do it.";
 STUPIDSHIT
+
 	die();
 }
 
@@ -272,25 +273,35 @@ while ( my $row = $csv->getline( $fh ) )
 
 		if( $row->[$text_more] =~ /\S+/ ) {
 			my $more_text = $row->[$text_more];
-			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_text );
+			$output_text .= "\n\n---\n" . $more_text;
 		}
 	} 
 	elsif( $convert_html == 1 ) 
 	{
 		print "DEBUG: Entry is HTML - converting\n" if $debug;
+
+		# Are there <UL> without a following <P> that need to be fixed?
+		$input_text = fix_html_li($input_text);
+
+		# do the HTML conversion
 		$output_text = $wc->html2wiki( $input_text );
 
 		if( $row->[$text_more] =~ /\S+/ ) {
 			my $more_text = $row->[$text_more];
+			$more_text = fix_html_li($more_text);
 			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_text );
 		}
-        $output_text = fix_html_li($output_text);
 	}
 	elsif( $convert_html_no_p == 1) {
-		print "DEBUG: Entry is HTML w/o <p> - add <p> and convert\n" if $debug;
+		print "DEBUG: Entry ID $row->[$id] is HTML w/o <p> - add <p> and convert\n" if $debug;
 
+		# Fix bad <P>
 		my $temp_text = add_p_tags($input_text);
 
+		# Fix bad <UL>
+		$temp_text = fix_html_li($temp_text);
+
+		# do the HTML conversion
 		$output_text = $wc->html2wiki( $temp_text );
 
 		# Add on extra text if there's something there
@@ -298,9 +309,10 @@ while ( my $row = $csv->getline( $fh ) )
 		if( $row->[$text_more] =~ /\S+/ ) {
 			my $temp_more = $row->[$text_more];
 			my $more_out = add_p_tags($temp_more);
+			$more_out = fix_html_li($more_out);
 			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_out );
 		}
-        $output_text = fix_html_li($output_text);
+		# Are there <UL> without a following <P> that need to be fixed?
 	}
 
 	# Also add in an <em> </em> there to emphasize it in the outputting marked up text as well
@@ -485,9 +497,10 @@ sub fix_html_li
     my $input = shift @_;
 
     # if it has a <ul> without newlines, add them
-    if( $input =~ /(<\/ul>+\r?\n)+(?=(\r?\n)?)/gi ) {
-        print "Found un-ended list\n" if $debug;
-        $input =~ s/(<\/ul>+\r?\n)+(?=(\r?\n)?)/<\/UL>\n\n/gmi;
+	 print "DEBUG: Checking for un-ended list\n" if $debug;
+    if( $input =~ /(<\/ul>+\r?\n)+(?=(\r?\n)?)/gmi ) {
+        print "DEBUG: Found un-ended list\n" if $debug;
+        $input =~ s/(<\/ul>+\r?\n)+(?=(\r?\n)?)/<\/UL>\n<p>\n/gmi;
     }
 
     return $input;
