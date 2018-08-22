@@ -272,7 +272,7 @@ while ( my $row = $csv->getline( $fh ) )
 
 		if( $row->[$text_more] =~ /\S+/ ) {
 			my $more_text = $row->[$text_more];
-			$output_text .= "\n---\n" . $wc->html2wiki( $more_text );
+			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_text );
 		}
 	} 
 	elsif( $convert_html == 1 ) 
@@ -282,7 +282,7 @@ while ( my $row = $csv->getline( $fh ) )
 
 		if( $row->[$text_more] =~ /\S+/ ) {
 			my $more_text = $row->[$text_more];
-			$output_text .= "\n---\n" . $wc->html2wiki( $more_text );
+			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_text );
 		}
 	}
 	elsif( $convert_html_no_p == 1) {
@@ -297,7 +297,7 @@ while ( my $row = $csv->getline( $fh ) )
 		if( $row->[$text_more] =~ /\S+/ ) {
 			my $temp_more = $row->[$text_more];
 			my $more_out = add_p_tags($temp_more);
-			$output_text .= "\n---\n" . $wc->html2wiki( $more_out );
+			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_out );
 		}
 	}
 
