@@ -130,7 +130,9 @@ are entered by the command line.  Location isn't dealt with at all, and nor are 
  	- filename
 	- column numbers for the fields that Day One cares about
 
-# Stuff You Have To Do After
+# What This Script Will NOT DO
+## Errors, failures, and cleanup
+
 As I have found working with this, the script gets you about 80% of the way there.  It doesn't 
 make sense to spend hours working on edge cases for what can be considered a waste of time already,
 so once this is run and the data is imported, you'll still have to go through and do cleanup on 

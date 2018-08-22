@@ -40,7 +40,7 @@ my $output_to_console = 1;
 my $print_tags_to_console = 1;
 
 # 0 for all, id number (not line) if you're looking for a specific entry
-my $specific_entry = 0;
+my $specific_entry = 2629;
 
 # debugging and only want to output X entries before stopping (empty = all, number = that number)
 my $short_run = 0;
@@ -284,6 +284,7 @@ while ( my $row = $csv->getline( $fh ) )
 			my $more_text = $row->[$text_more];
 			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_text );
 		}
+        $output_text = fix_html_li($output_text);
 	}
 	elsif( $convert_html_no_p == 1) {
 		print "DEBUG: Entry is HTML w/o <p> - add <p> and convert\n" if $debug;
@@ -299,6 +300,7 @@ while ( my $row = $csv->getline( $fh ) )
 			my $more_out = add_p_tags($temp_more);
 			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_out );
 		}
+        $output_text = fix_html_li($output_text);
 	}
 
 	# Also add in an <em> </em> there to emphasize it in the outputting marked up text as well
@@ -473,6 +475,23 @@ sub add_p_tags
 #	$incoming_text =~ s/(^|\n)[\n\s]*/\n<\/p>$1<p>\n/g;
 
 	return $incoming_text;
+}
+
+# This will fix the errors where the end of a list item is combined with
+# the text from the next line.
+# We want to add two \n's between the </ul> if there's only one
+sub fix_html_li
+{
+    my $input = shift @_;
+
+    # if it has a <ul> without newlines, add them
+    if( $input =~ /(<\/ul>+\r?\n)+(?=(\r?\n)?)/gi ) {
+        print "Found un-ended list\n" if $debug;
+        $input =~ s/(<\/ul>+\r?\n)+(?=(\r?\n)?)/<\/UL>\n\n/gmi;
+    }
+
+    return $input;
+
 }
 
 ## NOTE: if you uncomment these remmeber they'll be at the end of your last imported entry
