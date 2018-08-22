@@ -40,7 +40,7 @@ my $output_to_console = 1;
 my $print_tags_to_console = 1;
 
 # 0 for all, id number (not line) if you're looking for a specific entry
-my $specific_entry = 2629;
+my $specific_entry = undef;
 
 # debugging and only want to output X entries before stopping (empty = all, number = that number)
 my $short_run = 0;
@@ -52,8 +52,8 @@ my $line_range = {
 	};
 # or entry ID range
 my $id_range = {
-	'start' => undef,
-	'end'   => undef,
+	'start' => 0,
+	'end'   => 2628,
 	};
 
 # Is there a default tag you want to add to each entry to identify the 
@@ -151,12 +151,12 @@ while ( my $row = $csv->getline( $fh ) )
 	if( defined $id_range->{start} && defined $id_range->{end} ) 
 	{
 		if( $row->[$id] < $id_range->{start} ) {
-			print "$row->[$id] < $id_range->{start}\n";
+#			print "$row->[$id] < $id_range->{start}\n";
 			next;
 		}
 		if( $row->[$id] > $id_range->{end} ) {
 			# in case the IDs are out of order don't just do a last() here
-			print "$row->[$id] > $id_range->{end}\n";
+#			print "$row->[$id] > $id_range->{end}\n";
 			next;
 		}
 	}
@@ -282,6 +282,7 @@ while ( my $row = $csv->getline( $fh ) )
 
 		# Are there <UL> without a following <P> that need to be fixed?
 		$input_text = fix_html_li($input_text);
+		$input_text = fix_other_html($input_text);
 
 		# do the HTML conversion
 		$output_text = $wc->html2wiki( $input_text );
@@ -289,6 +290,7 @@ while ( my $row = $csv->getline( $fh ) )
 		if( $row->[$text_more] =~ /\S+/ ) {
 			my $more_text = $row->[$text_more];
 			$more_text = fix_html_li($more_text);
+			$more_text = fix_other_html($more_text);
 			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_text );
 		}
 	}
@@ -300,6 +302,7 @@ while ( my $row = $csv->getline( $fh ) )
 
 		# Fix bad <UL>
 		$temp_text = fix_html_li($temp_text);
+		$temp_text = fix_other_html($temp_text);
 
 		# do the HTML conversion
 		$output_text = $wc->html2wiki( $temp_text );
@@ -309,7 +312,10 @@ while ( my $row = $csv->getline( $fh ) )
 		if( $row->[$text_more] =~ /\S+/ ) {
 			my $temp_more = $row->[$text_more];
 			my $more_out = add_p_tags($temp_more);
+
 			$more_out = fix_html_li($more_out);
+			$more_out = fix_other_html($more_out);
+
 			$output_text .= "\n\n---\n" . $wc->html2wiki( $more_out );
 		}
 		# Are there <UL> without a following <P> that need to be fixed?
@@ -324,7 +330,9 @@ while ( my $row = $csv->getline( $fh ) )
 	$output_text =~ s/--\]/<\/em>--]/g;
 
 	# and fix <br />'s
-	$output_text =~ s/<br \/>/<br>/g;
+#	print "fixing <BR>\n";
+#	$output_text =~ s/<br \/>/<br>/g;
+#	print "done fixing <BR>\n";
 
 	#### Tags and Keywords
 	# Movable type has the concept of both "tags" and "keywords".  I'm going to convert
@@ -484,7 +492,6 @@ sub add_p_tags
 	my $incoming_text = shift @_;
 	# magic from https://www.perlmonks.org/?node_id=591605
 	$incoming_text =~ s/(?!^<p>)([\r\n]){2,}/\n<p>\n/g;
-#	$incoming_text =~ s/(^|\n)[\n\s]*/\n<\/p>$1<p>\n/g;
 
 	return $incoming_text;
 }
@@ -507,11 +514,37 @@ sub fix_html_li
 
 }
 
+# Other misc fixes for bad html
+sub fix_other_html
+{
+	print "DEBUG: Fixing other HTML\n" ;
+	my $input = shift @_;
+	
+	# Also replace two <BR>'s on a line with a <p>
+	$input =~ s/<br><br>/<p>/ig;
+
+	# And fix <EM> on a line of it's own
+	$input =~ s/<EM>\s+(\S)/<EM>$1/igm;
+
+	# and the other end of the </EM>
+	if( $input =~ /(\S)\s+<\/EM>/igm ) {
+		print "Found a lost </EM>";
+		$input =~ s/(\S)\s+<\/EM>/$1<\/EM>/igm;
+	}
+
+	# Add a </P> before any <blockquote>'s to make sure the > goes on a new line
+	# Multiple preceeding </P> tags don't seem to matter after the markdown conversion
+	$input =~ s/(<blockquote>)/<\/P>\n$1/gim;
+
+	print "DEBUG: Fixed HTML OUTPUT:\n-------\n" if $debug;
+	print $input;
+	return $input;
+}
+
 ## NOTE: if you uncomment these remmeber they'll be at the end of your last imported entry
+print "\n\n--------------\n";
 print "Done!\n";
 print "Successful       = $processed\n";
 print "Failed :(        = $failed\n";
 print "Total inputs     = $line\n";
-print "Formatting       = ";
-print Dumper $formatting;
 print "\n";
