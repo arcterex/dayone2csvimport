@@ -12,6 +12,11 @@ Other things that are wrong:
  - there are almost no functions in this script
  - this was started out to be a 20 line "iterate through CSV, output file" script that grew 
  	into this monstrosity
+ - The way that setting base\_uri in HTML::WikiConverter::Markdown v0.68 seems to be wrong.  I've had
+ 	to patch this file (in version 0.68 add a line to return $uri right after line 518 in 
+	\_abs2url() before the check for $self->base_uri) to make sure that relative URLS (/foo.html)
+	are converted properly to absolute URLs (server.com/foo.html) when the links are converted
+	in markdown.  I have filed a bug
 
 ## About 
 This is a very *very* custom perl script to do the singlular job of converting a CSV from 

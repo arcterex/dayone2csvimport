@@ -13,7 +13,7 @@ my $filename = "entries.csv";
 
 # If you have html that just references pages (ie: <a href="foo.html">foo</a>) 
 # this is the URL to use as a base for it in the html2wiki converter
-my $base_url = "http://mysite.com";
+my $base_url = "http://arcterex.net";
 
 # Give the CSV column numbers some names so addressing fields in the array is easier
 # See the README.md file for more information about this and what these really mean.
@@ -52,8 +52,8 @@ my $line_range = {
 	};
 # or entry ID range
 my $id_range = {
-	'start' => 0,
-	'end'   => 2628,
+	'start' => undef,
+	'end'   => undef,
 	};
 
 # Is there a default tag you want to add to each entry to identify the 
@@ -67,7 +67,7 @@ my $dayoneexecutable = "dayone2";
 my $journalname = 'Old Blog';
 
 # Make sure that people know they're getting into a world of hurt using this
-my $this_is_stupid = 0;
+my $this_is_stupid = 1;
 if( $this_is_stupid != 0 ){
 	print <<'STUPIDSHIT';
 I acknowledge that I understand this is not meant for anyone but the author 
@@ -329,10 +329,12 @@ while ( my $row = $csv->getline( $fh ) )
 	$output_text =~ s/\[!--/[!--<em>/g;
 	$output_text =~ s/--\]/<\/em>--]/g;
 
-	# and fix <br />'s
-#	print "fixing <BR>\n";
-#	$output_text =~ s/<br \/>/<br>/g;
-#	print "done fixing <BR>\n";
+	# and fix <br />'s.  These are a result of a <BR> converted from html2wiki() into a 
+	# <BR /> (no idea why).  Since they are at the end of the line already just nuke them.
+	# They don't actually do anything in the Markdown other than add extra line breaks,
+	# but these are annoying to fix if you're a pedantic asshole like me who wants the 
+	# resulting entries to be as good as possible
+	$output_text =~ s/<br \/>//g;
 
 	#### Tags and Keywords
 	# Movable type has the concept of both "tags" and "keywords".  I'm going to convert
@@ -517,7 +519,7 @@ sub fix_html_li
 # Other misc fixes for bad html
 sub fix_other_html
 {
-	print "DEBUG: Fixing other HTML\n" ;
+	print "DEBUG: Fixing other HTML\n" if $debug;
 	my $input = shift @_;
 	
 	# Also replace two <BR>'s on a line with a <p>
@@ -528,7 +530,7 @@ sub fix_other_html
 
 	# and the other end of the </EM>
 	if( $input =~ /(\S)\s+<\/EM>/igm ) {
-		print "Found a lost </EM>";
+		print "Found a lost </EM>" if $debug;
 		$input =~ s/(\S)\s+<\/EM>/$1<\/EM>/igm;
 	}
 
@@ -537,7 +539,7 @@ sub fix_other_html
 	$input =~ s/(<blockquote>)/<\/P>\n$1/gim;
 
 	print "DEBUG: Fixed HTML OUTPUT:\n-------\n" if $debug;
-	print $input;
+	print $input if $debug;
 	return $input;
 }
 
